@@ -3,3 +3,8 @@ The summary is that it's a form of quantization for neural networks that, if eff
 See the "Proposal Talk.pdf" (this presentation was developed along with my classmate Noah Faro. My main contribution was the technical idea definition and plan, while Noah contributed background research, slide design, presentation structure, and probably other things I'm forgetting)
 
 The code here is a quick proof of concept that shows that quantizing this way can use SGD to learn a single linear layer to fit a dataset.
+
+![image](https://github.com/user-attachments/assets/cff8dd23-0333-4865-b734-4bb5d64d5048)
+
+![image](https://github.com/user-attachments/assets/311d4148-a0b1-4c80-a368-ea08e0651c59)
+
