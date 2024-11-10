@@ -1,6 +1,6 @@
-This is an initial repository for an idea I came up with for a class in my senior year of college (6.UAT).
+This is an initial repository for an idea I came up with for a class in my senior year of college (6.UAT in Spring 2022).
 The summary is that it's a form of quantization for neural networks that, if effective (and hasn't already been done), could improve train and inference efficiency.
-See the "Proposal Talk.pdf" (this presentation was developed along with my classmate Noah Faro. My main contribution was the technical idea definition and plan, while Noah contributed background research, slide design, presentation structure, and probably other things I'm forgetting)
+See the "Proposal Talk.pdf" (a couple relevant slides beloy). This presentation was developed along with my classmate Noah Faro. My main contribution was the technical idea definition and plan, while Noah contributed background research, slide design, presentation structure, and probably other things I'm forgetting.
 
 The code here is a quick proof of concept that shows that quantizing this way can use SGD to learn a single linear layer to fit a dataset.
 
