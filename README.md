@@ -1,4 +1,4 @@
-The goal of this project is to explore one potential way of improving the efficiency of training and inference in deep learning models via quantization. So far, I have created a proof-of-concept demonstration of this technique.
+The goal of this project is to explore one potential way of improving the efficiency of training and inference in deep learning models via quantization. So far, I have created a proof-of-concept demonstration of this technique, where the algorithm can successfully learn a simple task.
 
 This is an initial repository for an idea I came up with for a class in my senior year of college (6.UAT in Spring 2022).
 The summary is that it's a form of quantization for neural networks that, if effective (and hasn't already been done), could improve train and inference efficiency.
