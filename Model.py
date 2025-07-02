@@ -1,6 +1,8 @@
+from typing import Optional
+from TabledObjects import Scalar, Mat, Vec
+
+
 class LinLayer:
-    Vec = None
-    Mat = None
     @staticmethod
     def set_classes(Vec, Mat):
         LinLayer.Vec = Vec
@@ -13,8 +15,8 @@ class LinLayer:
         self.w = w
         self.b = b
 
-        self.d_w = None
-        self.d_b = None
+        self.d_w: Optional[Mat] = None
+        self.d_b: Optional[Vec] = None
         self.a = None
 
     def forward(self, x):
@@ -37,10 +39,16 @@ class LinLayer:
 
         return new_grad
 
-    def step(self):
+    def step(self, lr=None):
+        if lr is None:
+            lr = 1
         assert self.d_w is not None and self.d_b is not None, "Attempted to step when saved gradients are None"
-        self.w = self.w - self.d_w
-        self.b = self.b - self.d_b
+        if isinstance(lr, Scalar):
+            self.w = self.w - self.d_w.scale(lr)
+            self.b = self.b - self.d_b.scale(lr)
+        else:
+            self.w = self.w - self.d_w.mult_int(lr)
+            self.b = self.b - self.d_b.mult_int(lr)
         self.d_w = None
         self.d_b = None
 

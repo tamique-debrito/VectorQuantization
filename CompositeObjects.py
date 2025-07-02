@@ -1,3 +1,5 @@
+#TODO: Actually try out using this concept
+
 import random
 
 class Composite:

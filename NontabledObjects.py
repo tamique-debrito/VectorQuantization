@@ -10,11 +10,21 @@ class NontabledObject:
         NontabledObject.lr = lr
 
 
+class Scalar(NontabledObject):
+    def __init__(self, s=None) -> None:
+        if s is None:
+            s = np.random.uniform(-1, 1)
+        self.s = s
+        
+
 class Vec(NontabledObject):
     def __init__(self, v=None):
         if v is None:
             v = np.random.uniform(-1, 1, self.d)
         self.v = v
+
+    def scale(self, s):
+        return Vec(self.v * s.s)
 
     def __add__(self, other_vec):
         return Vec(self.v + other_vec.v)
@@ -50,6 +60,9 @@ class Mat(NontabledObject):
             m = np.random.uniform(-1, 1, (self.d, self.d))
 
         self.m = m
+
+    def scale(self, s):
+        return Mat(self.m * s.s)
 
     def __add__(self, other_mat):
         return Mat(self.m + other_mat.m)

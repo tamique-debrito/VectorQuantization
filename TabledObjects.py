@@ -1,28 +1,49 @@
 import random
 
+from CreationScript import NAMES
+
 class TabledObject:
     tables = None
+    n_scalar = None
     n_vec = None
     n_mat = None
     @staticmethod
     def load_tables():
         import pickle
-        names = ['activ', 'grad_l1', 'grad_mask', 'add_vec', 'sub_vec', 'add_mat', 'sub_mat', 'prod', 'prod_t', 'prod_outer', 'l1_err']
+        names = NAMES
         tables = dict()
         for name in names:
             with open('precomputed/' + name, 'rb') as f:
                 tables[name] = pickle.load(f)
 
         TabledObject.tables = tables
+        TabledObject.n_scalar = len(TabledObject.tables['scale_vec'])
         TabledObject.n_vec = len(TabledObject.tables['activ'])
         TabledObject.n_mat = len(TabledObject.tables['add_mat'])
+
+class Scalar(TabledObject):
+    s: int
+    def __init__(self, s=None):
+        if s is None:
+            s = random.randrange(self.n_scalar)
+        self.s = s
+    
 
 class Vec(TabledObject):
     def __init__(self, v=None):
         if v is None:
             v = random.randrange(self.n_vec)
-
+        assert isinstance(v, int), "Must have integer index"
         self.v = v
+
+    def mult_int(self, n: int):
+        v = Vec(self.v)
+        for _ in range(n - 1):
+            v = v + self
+        return v
+    
+    def scale(self, scalar):
+        return Vec(self.tables['scale_vec'][scalar.s][self.v])
 
     def __add__(self, other_vec):
         return Vec(self.tables['add_vec'][self.v][other_vec.v])
@@ -59,8 +80,16 @@ class Mat(TabledObject):
     def __init__(self, w=None):
         if w is None:
             w = random.randrange(self.n_mat)
-
         self.w = w
+
+    def mult_int(self, n: int):
+        w = Mat(self.w)
+        for _ in range(n - 1):
+            w = w + self
+        return w
+
+    def scale(self, scalar):
+        return Mat(self.tables['scale_mat'][scalar.s][self.w])
 
     def __add__(self, other_mat):
         return Mat(self.tables['add_mat'][self.w][other_mat.w])
