@@ -1,4 +1,6 @@
 *notes*
+!Evolutionary/COMPOSITION_NOTES.md
 precomputed/*
 *.pyc
 __pycache__/
+sweep_results/

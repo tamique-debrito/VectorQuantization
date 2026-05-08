@@ -11,26 +11,43 @@ class TrainUnit:
     def __init__(self,
                  base_unit_class: type[AbstractBaseUnit],
                  num_examples: int,
-                 num_epochs: int
+                 num_epochs: int,
+                 dataset_type: str = "random",
                  ) -> None:
         assert base_unit_class.NUM_DATA_OBJ >= num_examples, "Can't have more examples that data objects"
         self.BaseUnit = base_unit_class
         self.num_examples = num_examples
         self.num_epochs = num_epochs
         self.num_data_obj = self.BaseUnit.NUM_DATA_OBJ
+        self.dataset_type = dataset_type
 
     @staticmethod
-    def _static_generate_toy_dataset(num_examples: int, num_data_obj: int):
-        dataset = []
-        for _ in range(num_examples):
-            input_vec = Vec(random.randrange(num_data_obj))
-            output_vec = Vec(random.randrange(num_data_obj))
-            dataset.append((input_vec, output_vec))
-        return dataset
+    def _static_generate_toy_dataset(num_examples: int, num_data_obj: int, dataset_type: str = "random"):
+        # dataset_type controls the structure of the (input, target) mapping per generated dataset:
+        #   "random"      — each example independently random; no learnable structure within a dataset
+        #   "function"    — sample a random function f: input -> target, then targets = f(inputs)
+        #   "identity"    — target == input; tests whether the unit can collapse to a copy
+        #   "permutation" — sample a random permutation; bijective function on the index set
+        if dataset_type == "random":
+            return [(Vec(random.randrange(num_data_obj)), Vec(random.randrange(num_data_obj)))
+                    for _ in range(num_examples)]
+        if dataset_type == "identity":
+            inputs = [random.randrange(num_data_obj) for _ in range(num_examples)]
+            return [(Vec(i), Vec(i)) for i in inputs]
+        if dataset_type == "function":
+            f = [random.randrange(num_data_obj) for _ in range(num_data_obj)]
+            inputs = [random.randrange(num_data_obj) for _ in range(num_examples)]
+            return [(Vec(i), Vec(f[i])) for i in inputs]
+        if dataset_type == "permutation":
+            perm = list(range(num_data_obj))
+            random.shuffle(perm)
+            inputs = [random.randrange(num_data_obj) for _ in range(num_examples)]
+            return [(Vec(i), Vec(perm[i])) for i in inputs]
+        raise ValueError(f"Unknown dataset_type: {dataset_type}")
 
     @staticmethod
-    def static_train(unit: AbstractBaseUnit, num_examples: int, num_epochs: int, num_data_obj: int) -> list[float]:
-        toy_dataset = TrainUnit._static_generate_toy_dataset(num_examples, num_data_obj)
+    def static_train(unit: AbstractBaseUnit, num_examples: int, num_epochs: int, num_data_obj: int, dataset_type: str = "random") -> list[float]:
+        toy_dataset = TrainUnit._static_generate_toy_dataset(num_examples, num_data_obj, dataset_type)
         accuracies = []
         for epoch in range(num_epochs):
             correct_predictions = 0
@@ -51,23 +68,18 @@ class TrainUnit:
         return accuracies
 
     def train(self, unit: AbstractBaseUnit) -> list[float]:
-        # The original train method called init_data to get self.unit and self.toy_dataset.
-        # Now, self.unit and self.toy_dataset are initialized in __init__ via init_data.
-        # So, we can directly pass self.unit to the static_train method.
-        return TrainUnit.static_train(unit, self.num_examples, self.num_epochs, self.num_data_obj)
+        return TrainUnit.static_train(unit, self.num_examples, self.num_epochs, self.num_data_obj, self.dataset_type)
 
     @staticmethod
-    def static_evaluate_training_performance(unit: AbstractBaseUnit, trains_per_unit: int, evaluation_function, num_examples: int, num_epochs: int, num_data_obj: int) -> float:
+    def static_evaluate_training_performance(unit: AbstractBaseUnit, trains_per_unit: int, evaluation_function, num_examples: int, num_epochs: int, num_data_obj: int, dataset_type: str = "random") -> float:
         eval_score = 0
         for i in range(trains_per_unit):
-            train_results = TrainUnit.static_train(unit, num_examples, num_epochs, num_data_obj)
+            train_results = TrainUnit.static_train(unit, num_examples, num_epochs, num_data_obj, dataset_type)
             eval_score += evaluation_function(train_results)
         return eval_score / trains_per_unit
 
     def evaluate_training_performance(self, unit: AbstractBaseUnit, trains_per_unit: int, evaluation_function) -> float:
-        # The original evaluate_training_performance called self.train(), which initialized self.unit.
-        # Now, self.unit is available from __init__. We pass it directly to the static method.
-        return TrainUnit.static_evaluate_training_performance(unit, trains_per_unit, evaluation_function, self.num_examples, self.num_epochs, self.num_data_obj)
+        return TrainUnit.static_evaluate_training_performance(unit, trains_per_unit, evaluation_function, self.num_examples, self.num_epochs, self.num_data_obj, self.dataset_type)
 
 def simple_eval(results):
     weights = list(range(1, len(results)))

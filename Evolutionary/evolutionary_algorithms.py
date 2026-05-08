@@ -17,6 +17,7 @@ class SimpleEvolutionaryAlg:
                  mutation_probability: float,
                  top_q_percent: float = 0.7,
                  num_op_obj: Optional[int] = None,
+                 dataset_type: str = "random",
                 ):
         self.pop_size = pop_size
         self.num_data_obj = num_data_obj
@@ -26,9 +27,10 @@ class SimpleEvolutionaryAlg:
         self.epochs_per_train = epochs_per_train
         self.mutation_probability = mutation_probability
         self.top_q_percent = top_q_percent
+        self.dataset_type = dataset_type
         self.population: List[Tuple[Any, float]] = [] # List of (BaseUnit, performance) tuples
         # Create a TrainUnit instance to get num_examples and num_epochs for static calls
-        self.train_config = TrainUnit(base_unit_factory(self.num_data_obj), self.examples_per_train, self.epochs_per_train)
+        self.train_config = TrainUnit(base_unit_factory(self.num_data_obj), self.examples_per_train, self.epochs_per_train, self.dataset_type)
         self._initialize_population()
         print(f"Algorithm initialized with parameters: pop_size={self.pop_size}, num_data_obj={self.num_data_obj}, num_op_obj={self.num_op_obj}, trains_per_unit={self.trains_per_unit}, examples_per_train={self.examples_per_train}, epochs_per_train={self.epochs_per_train}, mutation_probability={self.mutation_probability}, top_q_percent={self.top_q_percent}")
 
@@ -51,7 +53,7 @@ class SimpleEvolutionaryAlg:
             self.top_q_percent = top_q_percent
         
         # Re-initialize train_config with potentially updated parameters
-        self.train_config = TrainUnit(base_unit_factory(self.num_data_obj), self.examples_per_train, self.epochs_per_train)
+        self.train_config = TrainUnit(base_unit_factory(self.num_data_obj), self.examples_per_train, self.epochs_per_train, self.dataset_type)
 
     def _initialize_population(self):
         print("Initializing population...")
@@ -68,7 +70,7 @@ class SimpleEvolutionaryAlg:
             if i % 100 == 0: print(f"\rUnit {i + 1} / {self.pop_size}", end="")
         print("\nPopulation initialized.")
 
-    def run_evolutionary_step(self):
+    def run_evolutionary_step(self, verbose: bool = True):
         # Sort population by performance (descending)
         self.population.sort(key=lambda x: x[1], reverse=True)
 
@@ -76,18 +78,20 @@ class SimpleEvolutionaryAlg:
         num_top_performers = int(self.pop_size * self.top_q_percent)
         top_performers = [unit for unit, _ in self.population[:num_top_performers]]
 
-        # Calculate and display performance metrics
+        # Calculate performance metrics
         performances = [perf for _, perf in self.population]
         avg_performance = sum(performances) / self.pop_size
         max_unit_info = self.population[0]
-        print(f"Average performance: {avg_performance:.6f}, Max performance: {max_unit_info[1]:.6f}")
+        if verbose:
+            print(f"Average performance: {avg_performance:.6f}, Max performance: {max_unit_info[1]:.6f}")
 
-        p = self.train_config.evaluate_training_performance(
+        validated_max_perf = self.train_config.evaluate_training_performance(
                 max_unit_info[0],
                 self.trains_per_unit * 5,
                 simple_eval,
             )
-        print(f"validating max. Perf: {p:.4f}")
+        if verbose:
+            print(f"validating max. Perf: {validated_max_perf:.4f}")
 
 
         new_population: List[Tuple[Any, float]] = []
@@ -118,8 +122,8 @@ class SimpleEvolutionaryAlg:
                 simple_eval,
             )
             new_population.append((new_unit, performance))
-            if i % 100 == 0: print(f"\rCreating new unit {i + 1} / {num_new_units}", end="")
-        print("\nNew population created.")
+            if verbose and i % 100 == 0: print(f"\rCreating new unit {i + 1} / {num_new_units}", end="")
+        if verbose: print("\nNew population created.")
 
         top_performers_reevaluated = []
         for unit in top_performers:
@@ -132,4 +136,10 @@ class SimpleEvolutionaryAlg:
 
 
         # Combine top performers and new units to form the next generation
-        self.population = top_performers_reevaluated + new_population 
+        self.population = top_performers_reevaluated + new_population
+
+        return {
+            "avg_performance": avg_performance,
+            "max_performance": max_unit_info[1],
+            "validated_max_performance": validated_max_perf,
+        } 
