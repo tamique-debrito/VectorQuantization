@@ -14,20 +14,23 @@ def base_unit_factory(num_vec, num_mat=None, num_update_obj=None):
             self.w = Mat(random.randrange(BaseUnit.NUM_OPERATOR_OBJ))
 
         def forward(self, v: Vec) -> Vec:
-            self.v_out = Vec(v_idx=BaseUnit.FORWARD_TABLE[v.v_idx][self.w.w_idx])
+            # Read tables via `self` so per-instance overrides (from mutate / splice
+            # / deterministic construction) actually take effect. Reading via the
+            # closure-captured class would silently ignore instance attributes.
+            self.v_out = Vec(v_idx=self.FORWARD_TABLE[v.v_idx][self.w.w_idx])
             return self.v_out
-        
+
         def find_back_info(self, target: Vec):
             assert self.v_out is not None, "No out vector when finding back info"
-            return Vec(v_idx=BaseUnit.FIND_BACK_INFO_TABLE[target.v_idx][self.v_out.v_idx])
-        
+            return Vec(v_idx=self.FIND_BACK_INFO_TABLE[target.v_idx][self.v_out.v_idx])
+
         def backward(self, v_back_info: Vec):
-            return Vec(v_idx=BaseUnit.BACKWARD_TABLE[v_back_info.v_idx][self.w.w_idx])
-        
+            return Vec(v_idx=self.BACKWARD_TABLE[v_back_info.v_idx][self.w.w_idx])
+
         def update(self, v_back_info: Vec):
             assert self.v_out is not None, "No out vector during update"
-            update_obj = BaseUnit.FIND_UPDATE_TABLE[v_back_info.v_idx][self.v_out.v_idx]
-            self.w.w_idx = BaseUnit.APPLY_UPDATE_TABLE[update_obj][self.w.w_idx]
+            update_obj = self.FIND_UPDATE_TABLE[v_back_info.v_idx][self.v_out.v_idx]
+            self.w.w_idx = self.APPLY_UPDATE_TABLE[update_obj][self.w.w_idx]
 
         @staticmethod
         def init_table(in_n_1, in_n_2, out_n) -> TABLE_2D:
