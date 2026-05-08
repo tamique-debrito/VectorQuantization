@@ -124,7 +124,7 @@ class SimpleEvolutionaryAlg:
         top_performers_reevaluated = []
         for unit in top_performers:
             reevaluated_performance = self.train_config.evaluate_training_performance(
-                new_unit,
+                unit,
                 self.trains_per_unit,
                 simple_eval,
             )
