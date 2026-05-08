@@ -1,6 +1,9 @@
 *notes*
 !Evolutionary/COMPOSITION_NOTES.md
+!Evolutionary/SEEDING_NOTES.md
+!Evolutionary/SWEEP_FINDINGS.md
 precomputed/*
 *.pyc
 __pycache__/
 sweep_results/
+bench_seeding_results/

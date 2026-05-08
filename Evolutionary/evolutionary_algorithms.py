@@ -8,8 +8,8 @@ from Evolutionary.train_unit import TrainUnit, run_train_session, simple_eval
 from Evolutionary.mutations import simple_mutate, splice_units
 
 class SimpleEvolutionaryAlg:
-    def __init__(self, 
-                 pop_size: int, 
+    def __init__(self,
+                 pop_size: int,
                  num_data_obj: int,
                  trains_per_unit: int,
                  examples_per_train: int,
@@ -18,7 +18,11 @@ class SimpleEvolutionaryAlg:
                  top_q_percent: float = 0.7,
                  num_op_obj: Optional[int] = None,
                  dataset_type: str = "random",
+                 initial_population: Optional[List[Any]] = None,
                 ):
+        # If an initial_population is supplied, pop_size is taken from it.
+        if initial_population is not None:
+            pop_size = len(initial_population)
         self.pop_size = pop_size
         self.num_data_obj = num_data_obj
         self.num_op_obj = num_op_obj
@@ -31,7 +35,10 @@ class SimpleEvolutionaryAlg:
         self.population: List[Tuple[Any, float]] = [] # List of (BaseUnit, performance) tuples
         # Create a TrainUnit instance to get num_examples and num_epochs for static calls
         self.train_config = TrainUnit(base_unit_factory(self.num_data_obj), self.examples_per_train, self.epochs_per_train, self.dataset_type)
-        self._initialize_population()
+        if initial_population is not None:
+            self._initialize_population_from_seed(initial_population)
+        else:
+            self._initialize_population()
         print(f"Algorithm initialized with parameters: pop_size={self.pop_size}, num_data_obj={self.num_data_obj}, num_op_obj={self.num_op_obj}, trains_per_unit={self.trains_per_unit}, examples_per_train={self.examples_per_train}, epochs_per_train={self.epochs_per_train}, mutation_probability={self.mutation_probability}, top_q_percent={self.top_q_percent}")
 
     def set_train_parameters(self,
@@ -69,6 +76,20 @@ class SimpleEvolutionaryAlg:
             self.population.append((unit_to_train, performance))
             if i % 100 == 0: print(f"\rUnit {i + 1} / {self.pop_size}", end="")
         print("\nPopulation initialized.")
+
+    def _initialize_population_from_seed(self, units: List[Any]):
+        # Evaluate caller-provided units. Used for benchmarks where the population
+        # has been lifted from a smaller-dimension run rather than randomly built.
+        print(f"Initializing population from {len(units)} pre-built units...")
+        for i, unit in enumerate(units):
+            performance = self.train_config.evaluate_training_performance(
+                unit,
+                self.trains_per_unit,
+                simple_eval,
+            )
+            self.population.append((unit, performance))
+            if i % 100 == 0: print(f"\rEvaluating unit {i + 1} / {self.pop_size}", end="")
+        print("\nSeed population evaluated.")
 
     def run_evolutionary_step(self, verbose: bool = True):
         # Sort population by performance (descending)
