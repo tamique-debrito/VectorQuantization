@@ -59,6 +59,7 @@ def stage_a_evolve_small(args, out_dir: str) -> Dict[str, Any]:
         mutation_probability=args.mutation_probability,
         top_q_percent=args.top_q_percent,
         dataset_type=args.dataset_type,
+        workers=args.workers_stage_a,
     )
     history = []
     for g in range(args.num_generations_small):
@@ -110,6 +111,18 @@ def _stage_b_one_variant(kwargs):
     t0 = time.time()
     pool_payload = load_population(small_pool_path)
     small_pool = pool_payload["units"]
+
+    # Filter the small pool down to the top fraction by recorded performance,
+    # so seeding draws structure from units that actually learned the task —
+    # not from the whole population (which still contains low-fitness mutants).
+    seed_top_q = args_dict.get("seed_top_q", 1.0)
+    if seed_top_q < 1.0:
+        scored = [(u, getattr(u, "performance", 0.0)) for u in small_pool]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        keep = max(1, int(len(scored) * seed_top_q))
+        small_pool = [u for u, _ in scored[:keep]]
+        print(f"  [{variant}] filtered small pool to top {keep}/{len(scored)} "
+              f"(min perf in kept: {scored[keep-1][1]:.3f})", flush=True)
 
     # Lift.
     lifted = lift_population(
@@ -182,7 +195,11 @@ def _stage_b_one_variant(kwargs):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out_dir", default="bench_seeding_results")
-    p.add_argument("--pop_size", type=int, default=100)
+    p.add_argument("--pop_size", type=int, default=100,
+                   help="Default pop size for both stages. Override per stage "
+                        "with --pop_size_small / --pop_size_big.")
+    p.add_argument("--pop_size_small", type=int, default=None)
+    p.add_argument("--pop_size_big", type=int, default=None)
     p.add_argument("--nd_small", type=int, default=4)
     p.add_argument("--nd_big", type=int, default=8)
     p.add_argument("--num_generations_small", type=int, default=50)
@@ -192,6 +209,10 @@ def main():
     p.add_argument("--examples_per_train", type=int, default=3)
     p.add_argument("--mutation_probability", type=float, default=0.2)
     p.add_argument("--top_q_percent", type=float, default=0.3)
+    p.add_argument("--seed_top_q", type=float, default=0.3,
+                   help="Fraction of the Stage A population (top by performance) "
+                        "used as parents when lifting. 1.0 = use all units, "
+                        "matching the pre-existing behaviour.")
     p.add_argument("--dataset_type", default="identity")
     p.add_argument("--variants", type=_csv_strs,
                    default=sorted(LIFT_VARIANTS.keys()))
@@ -202,8 +223,22 @@ def main():
         "--workers",
         type=int,
         default=max(1, (os.cpu_count() or 2) - 1),
+        help="Workers for Stage B (parallel across variants).",
+    )
+    p.add_argument(
+        "--workers_stage_a",
+        type=int,
+        default=max(1, (os.cpu_count() or 2) - 1),
+        help="Intra-run workers for Stage A's per-unit fitness evaluation. "
+             "Worth raising for large pop_size_small.",
     )
     args = p.parse_args()
+    if args.pop_size_small is None:
+        args.pop_size_small = args.pop_size
+    if args.pop_size_big is None:
+        args.pop_size_big = args.pop_size
+    # Stage A reads `args.pop_size` directly; route through `pop_size_small`.
+    args.pop_size = args.pop_size_small
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     run_dir = os.path.join(args.out_dir, timestamp)
@@ -231,6 +266,7 @@ def main():
         "top_q_percent": args.top_q_percent,
         "dataset_type": args.dataset_type,
         "num_generations_big": args.num_generations_big,
+        "seed_top_q": args.seed_top_q,
     }
     jobs = [
         {
@@ -238,7 +274,7 @@ def main():
             "variant": v,
             "nd_small": args.nd_small,
             "nd_big": args.nd_big,
-            "pop_size": args.pop_size,
+            "pop_size": args.pop_size_big,
             "out_dir": run_dir,
             "args_dict": args_dict,
         }

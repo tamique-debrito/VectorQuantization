@@ -37,6 +37,7 @@ def run_single(
     top_q_percent: float,
     dataset_type: str,
     num_generations: int,
+    inner_workers: int = 1,
 ) -> Dict[str, Any]:
     """Run one EA configuration and return its full per-generation history."""
     alg = SimpleEvolutionaryAlg(
@@ -49,6 +50,7 @@ def run_single(
         mutation_probability=mutation_probability,
         top_q_percent=top_q_percent,
         dataset_type=dataset_type,
+        workers=inner_workers,
     )
     history: List[Dict[str, float]] = []
     for gen in range(num_generations):
@@ -111,7 +113,14 @@ def main():
         "--workers",
         type=int,
         default=max(1, (os.cpu_count() or 2) - 1),
-        help="Process pool workers. Default: cpu_count - 1.",
+        help="Sweep-level workers (configs in parallel). Default: cpu_count - 1.",
+    )
+    parser.add_argument(
+        "--inner_workers",
+        type=int,
+        default=1,
+        help="Per-EA workers (units evaluated in parallel within one config). "
+             "Avoid nested pools: if --inner_workers > 1, pass --workers 1.",
     )
     args = parser.parse_args()
 
@@ -143,6 +152,7 @@ def main():
             "top_q_percent": tq,
             "dataset_type": dt,
             "num_generations": args.num_generations,
+            "inner_workers": args.inner_workers,
         })
 
     t_start = time.time()
