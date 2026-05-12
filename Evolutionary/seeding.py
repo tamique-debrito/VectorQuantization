@@ -17,19 +17,21 @@ from Evolutionary.base_unit import base_unit_factory
 
 
 # Each table's three axes are one of these "kinds". The kind determines the
-# axis size: `data` is `nd`, `op`/`update` are `nd**2` (in this codebase).
+# axis size: `data` and `back_info` are `nd` (back_info defaults to the data
+# count); `op`/`update` are `nd**2` (in this codebase).
 # Tuple is (axis_in1, axis_in2, axis_out).
 TABLE_SPECS: Dict[str, Tuple[str, str, str]] = {
-    "FORWARD_TABLE":        ("data",   "op",   "data"),
-    "FIND_BACK_INFO_TABLE": ("data",   "data", "data"),
-    "BACKWARD_TABLE":       ("data",   "op",   "data"),
-    "FIND_UPDATE_TABLE":    ("data",   "data", "update"),
-    "APPLY_UPDATE_TABLE":   ("update", "op",   "op"),
+    "FORWARD_TABLE":        ("data",      "op",   "data"),
+    "FIND_BACK_INFO_TABLE": ("data",      "data", "back_info"),
+    "BACKWARD_TABLE":       ("back_info", "op",   "back_info"),
+    "FIND_UPDATE_TABLE":    ("back_info", "data", "update"),
+    "APPLY_UPDATE_TABLE":   ("update",    "op",   "op"),
 }
 
 
 def _kind_size(kind: str, nd: int) -> int:
-    return nd if kind == "data" else nd * nd
+    # `back_info` shares `data`'s axis size by default in this codebase.
+    return nd if kind in ("data", "back_info") else nd * nd
 
 
 def _make_big_class(nd_big: int):
@@ -151,7 +153,7 @@ def _shift_collapse(_b: int, _kind: str, val: int, _k: int) -> int:
 
 def _make_iso_shift(nd_small: int) -> Callable[[int, str, int, int], int]:
     def shift(b: int, kind: str, val: int, _k: int) -> int:
-        if kind == "data":
+        if kind in ("data", "back_info"):
             return val + b * nd_small
         return val + b * (nd_small * nd_small)
     return shift
@@ -160,7 +162,7 @@ def _make_iso_shift(nd_small: int) -> Callable[[int, str, int, int], int]:
 def _make_permute_shift(nd_small: int, perm: Sequence[int]) -> Callable[[int, str, int, int], int]:
     def shift(b: int, kind: str, val: int, _k: int) -> int:
         pb = perm[b]
-        if kind == "data":
+        if kind in ("data", "back_info"):
             return val + pb * nd_small
         return val + pb * (nd_small * nd_small)
     return shift

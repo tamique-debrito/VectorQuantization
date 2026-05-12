@@ -17,8 +17,8 @@ def simple_mutate(base_unit: AbstractBaseUnit, probability: float) -> AbstractBa
     mutated_unit = copy.deepcopy(base_unit)
     table_outputs = {
         "FORWARD_TABLE": base_unit.NUM_DATA_OBJ,
-        "FIND_BACK_INFO_TABLE": base_unit.NUM_DATA_OBJ,
-        "BACKWARD_TABLE": base_unit.NUM_DATA_OBJ,
+        "FIND_BACK_INFO_TABLE": base_unit.NUM_BACK_INFO_OBJ,
+        "BACKWARD_TABLE": base_unit.NUM_BACK_INFO_OBJ,
         "FIND_UPDATE_TABLE": base_unit.NUM_UPDATE_OBJ,
         "APPLY_UPDATE_TABLE": base_unit.NUM_OPERATOR_OBJ,
     }

@@ -49,17 +49,23 @@ def serialize_population(
     num_update_obj: int,
     dataset_type: str,
     source: str,
+    num_back_info_obj: Optional[int] = None,
     extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    config: Dict[str, Any] = {
+        "num_data_obj": num_data_obj,
+        "num_op_obj": num_op_obj,
+        "num_update_obj": num_update_obj,
+        "dataset_type": dataset_type,
+        "source": source,
+        **(extra or {}),
+    }
+    # Only persist num_back_info_obj when it diverges from num_data_obj — keeps
+    # older saved populations (which had no such field) round-trip-compatible.
+    if num_back_info_obj is not None and num_back_info_obj != num_data_obj:
+        config["num_back_info_obj"] = num_back_info_obj
     return {
-        "config": {
-            "num_data_obj": num_data_obj,
-            "num_op_obj": num_op_obj,
-            "num_update_obj": num_update_obj,
-            "dataset_type": dataset_type,
-            "source": source,
-            **(extra or {}),
-        },
+        "config": config,
         "units": [serialize_unit(u) for u in units],
     }
 
@@ -83,7 +89,8 @@ def load_population(path: str) -> Dict[str, Any]:
     nd = cfg["num_data_obj"]
     n_op = cfg.get("num_op_obj")
     n_upd = cfg.get("num_update_obj")
-    base_cls = base_unit_factory(nd, num_mat=n_op, num_update_obj=n_upd)
+    n_bi = cfg.get("num_back_info_obj")  # absent in older files; factory defaults to nd
+    base_cls = base_unit_factory(nd, num_mat=n_op, num_update_obj=n_upd, num_back_info_obj=n_bi)
 
     units = []
     for rec in payload["units"]:

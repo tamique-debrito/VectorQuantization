@@ -14,17 +14,26 @@ class Mat:
     w_idx: int
 
 class AbstractBaseUnit(ABC):
-    # table dimensions
-    NUM_DATA_OBJ: int # Vectors
-    NUM_OPERATOR_OBJ: int # Matrices
-    NUM_UPDATE_OBJ: int # Something else, but could be thought of as matrices
+    # Table dimensions. There are four semantic "kinds" of object an axis can
+    # range over: DATA (the vectors a unit reads/writes), OPERATOR (the
+    # parameter `w`), BACK_INFO (the analogue of a gradient — produced by
+    # `find_back_info` and propagated by `backward`), and UPDATE (an
+    # intermediate object consumed by `apply_update`).
+    #
+    # BACK_INFO is conceptually distinct from DATA, but defaults to the same
+    # count because in standard backprop the gradient lives in the same
+    # space as the input vector. Nothing forces them to be equal.
+    NUM_DATA_OBJ: int       # Vectors
+    NUM_OPERATOR_OBJ: int   # Matrices
+    NUM_BACK_INFO_OBJ: int  # Gradient-analogues; defaults to NUM_DATA_OBJ
+    NUM_UPDATE_OBJ: int     # Intermediate update objects
 
-    # lookup tables
-    FORWARD_TABLE: TABLE_2D # NUM_DATA_OBJ x NUM_OPERATOR_OBJ -> NUM_DATA_OBJ
-    FIND_BACK_INFO_TABLE: TABLE_2D # NUM_DATA_OBJ x NUM_DATA_OBJ -> NUM_DATA_OBJ (v_target, v_out) -> v_back_info
-    BACKWARD_TABLE: TABLE_2D # NUM_DATA_OBJ x NUM_OPERATOR_OBJ -> NUM_DATA_OBJ
-    FIND_UPDATE_TABLE: TABLE_2D # NUM_DATA_OBJ x NUM_DATA_OBJ -> NUM_UPDATE_OBJ; (v_back_info, v_out) -> update_val
-    APPLY_UPDATE_TABLE: TABLE_2D # NUM_OPERATOR_OBJ x NUM_UPDATE_OBJ -> NUM_OPERATOR_OBJ
+    # Lookup tables. Each annotation reads as (axis_in1, axis_in2) -> axis_out.
+    FORWARD_TABLE: TABLE_2D        # (DATA,      OPERATOR) -> DATA          ; (v_in,        w)     -> v_out
+    FIND_BACK_INFO_TABLE: TABLE_2D # (DATA,      DATA)     -> BACK_INFO     ; (v_target,    v_out) -> v_back_info
+    BACKWARD_TABLE: TABLE_2D       # (BACK_INFO, OPERATOR) -> BACK_INFO     ; (v_back_info, w)     -> v_back_info' (propagated to the input side)
+    FIND_UPDATE_TABLE: TABLE_2D    # (BACK_INFO, DATA)     -> UPDATE        ; (v_back_info, v_out) -> update_obj
+    APPLY_UPDATE_TABLE: TABLE_2D   # (UPDATE,    OPERATOR) -> OPERATOR      ; (update_obj,  w)     -> w'
 
     @abstractmethod
     def __init__(self, w) -> None:
