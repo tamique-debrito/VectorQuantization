@@ -394,15 +394,244 @@ input space) cannot match block-1 targets.
   only 0.15 with the same budget. To match shift_iso's 1.0 from scratch
   would presumably require ~Stage-A-scale budget at nd=12, which is much
   more expensive than at nd=6.
-- **`block_tile_permute` also reaches 1.0**, even though its forward routing
+- ~~**`block_tile_permute` also reaches 1.0**, even though its forward routing
   is structurally "wrong" for identity. Mechanism: the small unit's update
   loop is preserved within each block, so within an epoch the `w_idx`
   reroutes to something that produces correct outputs. This is a stronger
   result than expected — the lift's value isn't only in its forward
-  structure, but in preserving the small unit's *learning procedure*.
+  structure, but in preserving the small unit's *learning procedure*.~~
+- **CORRECTION** (after Run 7): the `block_tile_permute = 1.0` finding above
+  was a bug, not a real result. `_lift_block_tile_permute` reject-sampled
+  for non-identity perms with a 10-attempt cap; for k=2 the only non-identity
+  perm is `[1,0]`, so each unit had a `0.5^10 ≈ 0.001` chance of falling
+  through to the identity perm. With pop=80 that yields ~1 lucky unit per
+  run that lifts as a perfect identity (since perm=[0,1] = shift_iso). The
+  EA's elitism propagated that one unit's offspring through the population
+  over 50 generations, driving val_max to 1.0 and avg from 0.013 (gen 0) to
+  0.94 (gen 49). With the fix (sample uniformly from non-identity perms),
+  `block_tile_permute` should not approach 1.0 on identity — it produces
+  big_FORWARD where all columns send block-0 inputs to block-1 outputs and
+  vice versa, which has zero overlap with identity targets. See Run 7 for
+  the equivalent permutation re-run; an identity re-run of Run 5 with the
+  fix is the natural follow-up.
 - **The top-q seed filter probably matters but wasn't isolated in this run.**
   All kept units had perf=1.0 here because Stage A converged. At smaller
   Stage A scales the filter would matter more; worth a separate ablation.
 - **Open**: replicate on `function` / `permutation` once Stage A reaches
   high val_max for those (likely needs even bigger budget given coverage
   ceilings — see "Theoretical context" at top of file).
+
+## Run 6 — permutation, nd=4 → 8, big Stage A
+
+Same harness as Run 5; only `--dataset_type permutation` changes (and
+nd_small=4 / nd_big=8 since nd=6+ is past its perm coverage ceiling).
+
+Command:
+```
+python bench_seeding.py --pop_size_small 2000 --pop_size_big 80 \
+  --nd_small 4 --nd_big 8 --num_generations_small 100 \
+  --num_generations_big 50 --trains_per_unit 60 --epochs_per_train 5 \
+  --examples_per_train 3 --seed_top_q 0.3 --dataset_type permutation
+```
+
+### Stage A trajectory (nd=4 permutation, pop=2000, 100 gens)
+
+| gen   | avg   | max   | val_max |
+|-------|-------|-------|---------|
+|  0    | 0.250 | 0.354 | 0.276   |
+| 25    | 0.260 | 0.419 | 0.340   |
+| 50    | 0.285 | 0.482 | 0.330   |
+| 75    | 0.332 | 0.516 | 0.361   |
+| 99    | 0.372 | 0.582 | **0.464** |
+
+Permutation is much harder for the EA than identity at the same nd. After
+100 generations × pop=2000 the population is still climbing (val_max
+steadily rising in the last 50 gens). With *3-example-with-replacement*
+scoring (per the caveat at the top of this doc) the practical ceiling is
+above the bare 0.667 coverage bound, but Stage A reached only 0.46 — well
+below saturation. Top-30% filter kept 600 units with min performance ≈
+0.40+.
+
+### Stage B (nd_big=8, pop=80, 50 gens, permutation)
+
+| variant              |  g0   | g25   | g49   | final  | delta vs baseline |
+|----------------------|-------|-------|-------|--------|-------------------|
+| **modular_tile**     | 0.199 | 0.211 | 0.256 | **0.256** | +0.137            |
+| block_tile_collapse  | 0.205 | 0.199 | 0.241 | 0.241  | +0.122            |
+| block_tile_shift_iso | 0.181 | 0.148 | 0.209 | 0.209  | +0.090            |
+| block_tile_permute   | 0.189 | 0.185 | 0.185 | 0.185  | +0.066            |
+| random_extend        | 0.146 | 0.120 | 0.121 | 0.121  | +0.002            |
+| baseline_random      | 0.116 | 0.122 | 0.119 | 0.119  | (baseline)        |
+
+Chance at nd=8 = 0.125. Baseline_random sits exactly at chance; the four
+"structural" variants are clearly above (+0.07 to +0.14).
+
+### Ranking flips vs. Run 5 — and why
+
+For identity, `block_tile_shift_iso` won (perfect closure: input-in-block-b
+→ output-in-block-b). For permutation, **modular_tile** wins and shift_iso
+drops to third.
+
+Mechanism: a *random* permutation drawn per session can map block-0 inputs
+to block-1 outputs. shift_iso restricts outputs to stay in the input's
+block, so it can never satisfy cross-block target positions — that's a
+half-block ceiling on its expected score. modular_tile and collapse have a
+similar half-ceiling (both restrict outputs to [0, nd_small)), but the
+lifted FORWARD's columns are arranged differently: modular tiles small
+columns across the big op space rather than concentrating them in one
+block, giving the Stage B EA more "varied" starting columns to select w_idx
+into.
+
+Take-aways:
+
+- **Seeding helps even when Stage A hasn't saturated.** Modular_tile
+  produced +0.137 over baseline despite Stage A only reaching 0.46.
+- **Best variant depends on the task structure.** identity rewards
+  block-local closure (shift_iso); permutation rewards diverse usable
+  columns (modular_tile / collapse). No single lift wins across tasks.
+- **`random_extend` ties baseline.** Preserving the small subgrid while
+  randomising the rest of the table doesn't help when half the input space
+  sees random outputs.
+- **Open**: re-run with a longer Stage A (5000 pop or 200 gens) to see if
+  the permutation seeding gap widens once the small unit actually reaches
+  its ceiling. Likely, since modular_tile's ceiling at nd_big=8 with the
+  3-example scoring is well above its current 0.256.
+
+## Run 7 — permutation, bug-fixed permute lift
+
+Two relevant changes since Run 6:
+1. `_lift_block_tile_permute` no longer reject-samples with a 10-attempt
+   cap — it now loops until a non-identity perm is drawn (see CORRECTION
+   note in Run 5 above for the bug). Without this fix, ~1 in 80 lifted
+   units for k=2 silently fell through to the identity perm and behaved
+   as a perfect shift_iso unit.
+2. `Evolutionary/population_io.py` now serializes `lift_permutation` so the
+   chosen perm round-trips through saved snapshots (purely for auditing).
+
+Same command as Run 6 (`--dataset_type permutation`, `nd_small=4`,
+`nd_big=8`, pop_small=2000, gens=100, pop_big=80, gens=50, top-q=0.3).
+
+| variant              | Run 6 (buggy) | Run 7 (fixed) | delta vs baseline |
+|----------------------|---------------|---------------|-------------------|
+| block_tile_collapse  | 0.241         | **0.213**     | +0.091            |
+| modular_tile         | 0.256         | 0.201         | +0.079            |
+| block_tile_shift_iso | 0.209         | 0.198         | +0.076            |
+| block_tile_permute   | 0.185         | 0.194         | +0.072            |
+| random_extend        | 0.121         | 0.129         | +0.007            |
+| baseline_random      | 0.119         | 0.122         | (baseline)        |
+
+The four block-ish variants now cluster tightly in 0.19-0.21 — consistent
+with all of them sharing the same structural half-ceiling at nd_big=8 (each
+restricts outputs to half the big range in different ways, none can match a
+full random permutation). Modular_tile's previous lead in Run 6 was within
+the inter-run noise; the better-defined story is that *any* structural lift
+beats baseline by ≈ +0.08 on permutation, with the choice of variant
+mattering less than for identity.
+
+### Caveat about the permutation score
+
+With `examples_per_train = 3` per session and inputs sampled with
+*replacement*, only ~3 of the 8 positions of any drawn permutation are
+tested. Expected unique-position coverage at examples=8 with replacement
+is `8 · (1 − (7/8)^8) ≈ 5.27`, i.e. 66% of positions. To make the score
+reflect "did the unit handle the whole permutation," sampling without
+replacement at `examples = nd` would be a cleaner signal. Open todo:
+add a `sampling="without_replacement"` mode to
+`_static_generate_toy_dataset` and re-run.
+
+## Run 8 — pop=20000, 200 generations, nd=4
+
+Command:
+```
+python sweep_evol.py --pop_sizes 20000 --nums_data_obj 4 \
+  --dataset_types function,permutation,identity \
+  --mutation_probabilities 0.05 --top_q_percents 0.3 \
+  --num_generations 200 --trains_per_unit 60 --epochs_per_train 5 \
+  --examples_per_train 3 --workers 1 --inner_workers 12
+```
+
+3 configs, ~46 min wall (CPU-shared with the nd=8 run below).
+
+### Trajectories
+
+| dataset      | gen 0 | gen 25 | gen 50 | gen 100 | gen 150 | gen 199 |
+|--------------|------:|-------:|-------:|--------:|--------:|--------:|
+| identity     | 0.748 | 1.000  | 1.000  | 1.000   | 1.000   | 1.000   |
+| permutation  | 0.294 | 0.352  | 0.446  | 0.454   | 0.465   | 0.464   |
+| function     | 0.297 | 0.331  | 0.496  | 0.493   | 0.509   | 0.604   |
+
+### What this tells us
+
+- **`identity` converges by gen ~25** then sits at 1.0 for the remaining 175
+  generations. No payoff from running longer.
+- **`permutation` plateaus around gen 100** at ~0.46. Doubling pop and 4× the
+  generations relative to Run 7-style configs barely moves the number
+  (compare 0.486 at pop=5000, gens=100). The "fit a 3-point slice of a random
+  permutation" task is effectively saturated under the current task semantics.
+- **`function` keeps climbing through gen 199**: avg pop 0.45 → 0.55, val 0.49
+  → 0.60. Reached 0.604 — well above the originally-quoted 0.30 coverage-bound
+  ceiling, which assumed the unit had to match the *full* random function. The
+  actual score reflects "fit 3 sampled positions of a random function," which
+  has many more matching columns. Function still has headroom past gen 200.
+- The widening gap between `function` and `permutation` is consistent with
+  the partial-match story: permutations are a thin 24-element subset of the
+  256-function space, so the EA quickly tiles enough of them to plateau, but
+  random functions are richer, and 5000 columns × 20000 units leave more room
+  to keep finding columns that fit observed slices.
+
+## Run 9 — nd=8, pop=5000, 100 generations
+
+Command:
+```
+python sweep_evol.py --pop_sizes 5000 --nums_data_obj 8 \
+  --dataset_types function,permutation,identity \
+  --mutation_probabilities 0.05 --top_q_percents 0.3 \
+  --num_generations 100 --trains_per_unit 60 --epochs_per_train 5 \
+  --examples_per_train 3 --workers 1 --inner_workers 6
+```
+
+3 configs, ~40 min wall.
+
+### Trajectories
+
+| dataset      | gen 0 | gen 25 | gen 50 | gen 75 | gen 99 | chance (1/8) |
+|--------------|------:|-------:|-------:|-------:|-------:|-------------:|
+| identity     | 0.157 | 0.376  | 0.544  | 0.720  | **0.858** | 0.125    |
+| permutation  | 0.122 | 0.134  | 0.125  | 0.125  | 0.127  | 0.125        |
+| function     | 0.121 | 0.133  | 0.123  | 0.129  | 0.120  | 0.125        |
+
+### What this tells us
+
+- **`identity` is still climbing at gen 99** — val_max went from 0.16 (random
+  init) to 0.86, and pop avg from 0.13 to 0.80. Trajectory shape looks like
+  it would converge to 1.0 with another ~50-100 generations. So identity is
+  reachable at nd=8, but the EA budget required scales sharply with the
+  search space (256 columns at nd=4 → 16M at nd=8).
+- **`permutation` and `function` are dead flat at chance.** Avg stays at
+  exactly `1/N = 0.125` from gen 0 to gen 99; max wiggles between 0.18 and
+  0.23 but val_max never breaks chance. This matches the coverage table: at
+  nd=8 there are 8! = 40,320 permutations and 8^8 ≈ 16.7M functions, vs only
+  64 columns per unit and 5000 × 64 ≈ 320K total columns sampled. Probability
+  that any random column matches a 3-position slice of an observed perm or
+  function is small enough that the EA never finds a fitness gradient to
+  climb.
+- This is the empirical confirmation of the coverage-bound section: at nd=8
+  the search space is too big for pop=5000 to even surface partial-match
+  columns reliably, so the EA does no useful work. Identity escapes this
+  because its "task domain" is size 1 and its solutions are dense (any column
+  with `C[v]=v` for the sampled `v`s wins).
+
+### Implications across both runs
+
+1. The expressive ceiling stories from the theoretical-context section hold
+   up. nd=4 function/permutation can be pushed by sheer scale; nd=8 cannot
+   without changing either the unit size, the EA mechanics, or the task
+   definition.
+2. Identity's EA difficulty grows with nd much faster than the coverage table
+   suggests (which is always 1.0). The scaling is in the *search* not the
+   *expressivity* — a unit with one identity column always exists, but
+   finding it is exponentially harder as nd grows.
+3. The ~0.46-0.60 ceiling on nd=4 permutation/function isn't the unit's
+   capacity ceiling; it's the *partial-match-on-3-points* ceiling. Changing
+   `examples_per_train = nd` (drawn without replacement) would expose how
+   much of that score actually corresponds to learning the full mapping.

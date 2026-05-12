@@ -199,12 +199,21 @@ def _lift_block_tile_permute(small_pool: Sequence[AbstractBaseUnit], nd_small: i
         raise ValueError("block_tile variants require nd_big % nd_small == 0")
     parent_idxs = [random.randrange(len(small_pool)) for _ in range(k)]
     # Pick a non-identity permutation if k > 1; for k == 1 fall back to identity.
+    # Bug history: previous version reject-sampled with a 10-attempt cap. For
+    # small k (e.g. k=2 has only 2 perms with one identity), a few percent of
+    # units would silently fall through to the identity perm — degenerating
+    # `block_tile_permute` into `block_tile_shift_iso`, which is a *correct*
+    # identity lift and inflated the variant's score in Run 5. Now we sample
+    # uniformly from non-identity permutations directly.
     perm = list(range(k))
     if k > 1:
-        # Reject-sample until we get one that isn't the identity.
-        for _ in range(10):
+        identity = list(range(k))
+        # Sample until we get a non-identity perm. Probability of identity is
+        # 1/k!, so this terminates almost always after one shuffle for k >= 3
+        # and at most a handful of tries for k == 2.
+        while True:
             random.shuffle(perm)
-            if perm != list(range(k)):
+            if perm != identity:
                 break
     tables = _block_tile(small_pool, parent_idxs, nd_small, nd_big,
                          _make_permute_shift(nd_small, perm))

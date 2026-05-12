@@ -35,7 +35,7 @@ def serialize_unit(unit: AbstractBaseUnit) -> Dict[str, Any]:
         "w_idx": int(unit.w.w_idx),
         "tables": {name: getattr(unit, name) for name in TABLE_NAMES},
     }
-    for tag in ("lift_variant", "lift_parents", "performance"):
+    for tag in ("lift_variant", "lift_parents", "lift_permutation", "performance"):
         if hasattr(unit, tag):
             record[tag] = getattr(unit, tag)
     return record
@@ -90,7 +90,7 @@ def load_population(path: str) -> Dict[str, Any]:
         unit = base_cls(Mat(int(rec["w_idx"])))
         for name in TABLE_NAMES:
             setattr(unit, name, rec["tables"][name])
-        for tag in ("lift_variant", "lift_parents", "performance"):
+        for tag in ("lift_variant", "lift_parents", "lift_permutation", "performance"):
             if tag in rec:
                 setattr(unit, tag, rec[tag])
         units.append(unit)
